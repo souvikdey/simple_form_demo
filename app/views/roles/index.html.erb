@@ -1,0 +1,17 @@
+<% title "Roles" %>
+
+<table>
+  <tr>
+    <th>Name</th>
+    <th>User</th>
+  </tr>
+  <% for roles in @roles %>
+    <tr>
+      <td><%= roles.name %></td>
+      <td><%= roles.user_id %></td>
+      <td><%= link_to "Show", roles %></td>
+    </tr>
+  <% end %>
+</table>
+
+<p><%= link_to "New Roles", new_roles_path %></p>
