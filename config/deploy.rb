@@ -1,25 +1,68 @@
-set :application, "set your application name here"
-set :repository,  "set your repository location here"
+set :application, "simple_form_demo"
 
-set :scm, :subversion
-# Or: `accurev`, `bzr`, `cvs`, `darcs`, `git`, `mercurial`, `perforce`, `subversion` or `none`
+# RVM integration
+# http://beginrescueend.com/integration/capistrano/
+$:.unshift(File.expand_path('./lib', ENV['rvm_path']))
+require "rvm/capistrano"
+set :rvm_ruby_string, "ruby-1.9.3-p194"
+set :rvm_type, :user
 
-role :web, "your web-server here"                          # Your HTTP server, Apache/etc
-role :app, "your app-server here"                          # This may be the same as your `Web` server
-role :db,  "your primary db-server here", :primary => true # This is where Rails migrations will run
-role :db,  "your slave db-server here"
+# Bundler integration (bundle install)
+# http://gembundler.com/deploying.html
+require "bundler/capistrano"
+set :bundle_without,  [:development, :test]
 
-# if you want to clean up old releases on each deploy uncomment this:
-# after "deploy:restart", "deploy:cleanup"
+set :user, "deploy"
+set :deploy_to, "/var/www/apps/#{application}"
+set :use_sudo, false
 
-# if you're still using the script/reaper helper you will need
-# these http://github.com/rails/irs_process_scripts
+# Must be set for the password prompt from git to work
+# http://help.github.com/deploy-with-capistrano/
+default_run_options[:pty] = true
+set :scm, :git
+set :repository, "git@github.com:andrebras/#{application}.git"
+set :branch, "master"
+set :deploy_via, :remote_cache
 
-# If you are using Passenger mod_rails uncomment this:
-# namespace :deploy do
-#   task :start do ; end
-#   task :stop do ; end
-#   task :restart, :roles => :app, :except => { :no_release => true } do
-#     run "#{try_sudo} touch #{File.join(current_path,'tmp','restart.txt')}"
-#   end
-# end
+# Multiple Stages Without Multistage Extension
+# https://github.com/capistrano/capistrano/wiki/2.x-Multiple-Stages-Without-Multistage-Extension
+desc "Deploy using internal address"
+task :internal do
+  server "192.168.3.21", :app, :web, :db, :primary => true
+end
+
+desc "Deploy using external address"
+task :external do
+  server "XXX.XXX.XXX.XXX", :app, :web, :db, :primary => true
+end
+
+# http://modrails.com/documentation/Users%20guide%20Nginx.html#capistrano
+namespace :deploy do
+  desc "Start server"
+  task :start, :roles => :app do
+    run "#{try_sudo} touch #{File.join(release_path,'tmp','restart.txt')}"
+  end
+
+  # not supported by Passenger server
+  task :stop, :roles => :app do
+  end
+
+  desc "Restart server"
+  task :restart, :roles => :app, :except => { :no_release => true } do
+    run "#{try_sudo} touch #{File.join(release_path,'tmp','restart.txt')}"
+  end
+
+  desc "Symlink shared configs and folders on each release."
+  task :symlink_shared, :roles => :app do
+    run "ln -nfs #{shared_path}/config/database.yml #{release_path}/config/database.yml"
+    #run "ln -nfs #{shared_path}/assets #{release_path}/public/assets"
+  end
+
+  desc "Execute migrations"
+  task :migrate, :roles => :db do
+    run "bundle exec rake db:migrate"
+  end
+end
+
+after 'deploy:update_code', 'deploy:symlink_shared'
+
